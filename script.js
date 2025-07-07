@@ -31,9 +31,19 @@ class CertificateGenerator {
     }
     
     init() {
-        this.createBackgroundImage();
         this.bindEvents();
         this.updateCharCounter();
+
+        // Wait for the custom font to be loaded before drawing
+        document.fonts.load('italic 400 1em "adobe-garamond-pro"').then(() => {
+            console.log('Font loaded successfully!');
+            // Now that font is loaded, load the background image and draw
+            this.createBackgroundImage();
+        }).catch(err => {
+            console.error('Font failed to load, will use fallback.', err);
+            // Draw anyway, the browser will use the fallback 'serif' font
+            this.createBackgroundImage();
+        });
     }
     
     createBackgroundImage() {
@@ -116,8 +126,8 @@ class CertificateGenerator {
     
     updateCharCounter() {
         const length = this.textInput.value.length;
-        this.charCounter.textContent = `${length}/50`;
-        this.charCounter.style.color = length > 45 ? '#dc3545' : '#6c757d';
+        this.charCounter.textContent = `${length}/80`;
+        this.charCounter.style.color = length > 75 ? '#dc3545' : '#6c757d';
     }
     
     handleImageUpload(e) {
@@ -190,13 +200,46 @@ class CertificateGenerator {
         // Draw custom text at bottom
         if (this.textInput.value.trim()) {
             this.ctx.fillStyle = '#2c3e50';
-            this.ctx.font = 'bold 32px serif';
+            this.ctx.font = 'italic 400 32px "adobe-garamond-pro", serif';
             this.ctx.textAlign = 'center';
-            // Position text near the bottom (90% down from top)
-            this.ctx.fillText(this.textInput.value, this.canvas.width / 2, this.canvas.height * 0.9);
+
+            const text = this.textInput.value;
+            const x = this.canvas.width / 2;
+            const maxWidth = this.canvas.width * 0.7; // Max width for text block
+            const lineHeight = 40; // Space between lines
+            const lines = this._getWrappedLines(text, maxWidth);
+
+            // Calculate starting Y to vertically center the block of text around the original position
+            const blockCenterY = this.canvas.height * 0.8;
+            const totalTextHeight = (lines.length - 1) * lineHeight;
+            const startY = blockCenterY - totalTextHeight / 2;
+
+            lines.forEach((line, index) => {
+                this.ctx.fillText(line, x, startY + (index * lineHeight));
+            });
         }
     }
-    
+
+    _getWrappedLines(text, maxWidth) {
+        const words = text.split(' ');
+        const lines = [];
+        let currentLine = '';
+
+        for (const word of words) {
+            const testLine = currentLine ? `${currentLine} ${word}` : word;
+            if (this.ctx.measureText(testLine).width > maxWidth && currentLine) {
+                lines.push(currentLine);
+                currentLine = word;
+            } else {
+                currentLine = testLine;
+            }
+        }
+        if (currentLine) {
+            lines.push(currentLine);
+        }
+        return lines;
+    }
+
     updateDragHandle() {
         if (this.uploadedImage) {
             const rect = this.canvas.getBoundingClientRect();
