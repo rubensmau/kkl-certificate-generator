@@ -16,15 +16,15 @@ class CertificateGenerator {
         this.backgroundImage = null;
         this.uploadedImage = null;
         this.originalImage = null; // Store original for cropping
-        this.imagePosition = { x: 250, y: 200 }; // Center position
+        this.imagePosition = { x: 324, y: 429 }; // Adjusted Y to maintain center with 35% + 17% height increase
         this.isDragging = false;
         this.dragOffset = { x: 0, y: 0 };
         
-        // Crop functionality (circular)
+        // Crop functionality (rectangular)
         this.isCropping = false;
-        this.cropCenter = { x: 0, y: 0 };
-        this.cropRadius = 0;
         this.cropStart = { x: 0, y: 0 };
+        this.cropEnd = { x: 0, y: 0 };
+        this.cropRect = { x: 0, y: 0, width: 0, height: 0 };
         this.isSelectingCrop = false;
         
         this.init();
@@ -35,13 +35,12 @@ class CertificateGenerator {
         this.updateCharCounter();
 
         // Wait for the custom font to be loaded before drawing
-        document.fonts.load('italic 400 1em "adobe-garamond-pro"').then(() => {
-            console.log('Font loaded successfully!');
-            // Now that font is loaded, load the background image and draw
+        document.fonts.load('300 1em "Futura Lt BT"').then(() => {
+            console.log('Futura Lt BT font loaded successfully!');
             this.createBackgroundImage();
         }).catch(err => {
-            console.error('Font failed to load, will use fallback.', err);
-            // Draw anyway, the browser will use the fallback 'serif' font
+            console.error('Futura Lt BT font failed to load, using fallback.', err);
+            // Draw anyway with fallback fonts
             this.createBackgroundImage();
         });
     }
@@ -55,13 +54,14 @@ class CertificateGenerator {
             this.canvas.width = this.backgroundImage.width;
             this.canvas.height = this.backgroundImage.height;
             
-            // Calculate circle size to fit within the background decorative circle
-            // Increased by additional 7% to 57% of the image width
-            this.circleSize = Math.round(this.canvas.width * 0.57);
+            // Calculate image size with 35% + 17% height increase, maintaining center point
+            this.imageAreaWidth = 2156 - 324;  // 1832 pixels (unchanged)
+            this.imageAreaHeight = Math.round((2007 - 783) * 1.35 * 1.17);  // 1933 pixels (35% + 17% increase)
+            this.circleSize = Math.min(this.imageAreaWidth, this.imageAreaHeight); // Use smaller dimension for square compatibility
             
-            // Update image position to center based on new canvas size
-            this.imagePosition.x = (this.canvas.width - this.circleSize) / 2;
-            this.imagePosition.y = (this.canvas.height - this.circleSize) / 2;
+            // Image position adjusted to maintain center point with increased height
+            this.imagePosition.x = 324;
+            this.imagePosition.y = 429;  // Adjusted to keep center at same position
             
             this.redrawCertificate();
             // Enable download button once background is loaded
@@ -126,8 +126,8 @@ class CertificateGenerator {
     
     updateCharCounter() {
         const length = this.textInput.value.length;
-        this.charCounter.textContent = `${length}/80`;
-        this.charCounter.style.color = length > 75 ? '#dc3545' : '#6c757d';
+        this.charCounter.textContent = `${length}/40`;
+        this.charCounter.style.color = length > 35 ? '#dc3545' : '#6c757d';
     }
     
     handleImageUpload(e) {
@@ -139,9 +139,10 @@ class CertificateGenerator {
             const img = new Image();
             img.onload = () => {
                 this.originalImage = img; // Store original for cropping
-                // Use dynamic circle size if available, otherwise default to 200
-                const size = this.circleSize || 200;
-                this.uploadedImage = this.resizeImage(img, size, size);
+                // Use the calculated area dimensions, or defaults (with 35% + 17% height increase)
+                const width = this.imageAreaWidth || 1832;
+                const height = this.imageAreaHeight || 1933;
+                this.uploadedImage = this.resizeImage(img, width, height);
                 this.redrawCertificate();
                 this.updateDragHandle();
                 this.downloadBtn.disabled = false;
@@ -200,17 +201,17 @@ class CertificateGenerator {
         // Draw custom text at bottom
         if (this.textInput.value.trim()) {
             this.ctx.fillStyle = '#2c3e50';
-            this.ctx.font = 'italic 400 32px "adobe-garamond-pro", serif';
+            this.ctx.font = '300 64px "Futura Lt BT", "Futura", "Trebuchet MS", "Arial", sans-serif';
             this.ctx.textAlign = 'center';
 
-            const text = this.textInput.value;
+            const text = "De: " + this.textInput.value;
             const x = this.canvas.width / 2;
             const maxWidth = this.canvas.width * 0.7; // Max width for text block
-            const lineHeight = 40; // Space between lines
+            const lineHeight = 70; // Space between lines (increased for 56px font)
             const lines = this._getWrappedLines(text, maxWidth);
 
-            // Calculate starting Y to vertically center the block of text around the original position
-            const blockCenterY = this.canvas.height * 0.8;
+            // Calculate starting Y to vertically center the block of text, moved up by 5%
+            const blockCenterY = this.canvas.height * 0.75;
             const totalTextHeight = (lines.length - 1) * lineHeight;
             const startY = blockCenterY - totalTextHeight / 2;
 
@@ -247,9 +248,10 @@ class CertificateGenerator {
             const scaleY = this.canvas.offsetHeight / this.canvas.height;
             
             this.dragHandle.style.display = 'block';
-            const size = this.circleSize || 200;
-            this.dragHandle.style.left = `${rect.left + (this.imagePosition.x + size/2) * scaleX - 10}px`;
-            this.dragHandle.style.top = `${rect.top + (this.imagePosition.y + size/2) * scaleY - 10}px`;
+            const width = this.imageAreaWidth || 1832;
+            const height = this.imageAreaHeight || 1652;
+            this.dragHandle.style.left = `${rect.left + (this.imagePosition.x + width/2) * scaleX - 10}px`;
+            this.dragHandle.style.top = `${rect.top + (this.imagePosition.y + height/2) * scaleY - 10}px`;
         }
     }
     
@@ -262,21 +264,24 @@ class CertificateGenerator {
         const mouseY = (e.clientY - rect.top) * scaleY;
         
         if (this.isCropping) {
-            // Handle circular crop selection
+            // Handle rectangular crop selection
             this.isSelectingCrop = true;
-            this.cropCenter.x = mouseX;
-            this.cropCenter.y = mouseY;
-            this.cropRadius = 0;
+            this.cropStart.x = mouseX;
+            this.cropStart.y = mouseY;
+            this.cropEnd.x = mouseX;
+            this.cropEnd.y = mouseY;
+            this.cropRect = { x: mouseX, y: mouseY, width: 0, height: 0 };
             return;
         }
         
         if (!this.uploadedImage) return;
         
-        const size = this.circleSize || 200;
+        const width = this.imageAreaWidth || 1832;
+        const height = this.imageAreaHeight || 1933;
         if (mouseX >= this.imagePosition.x && 
-            mouseX <= this.imagePosition.x + size &&
+            mouseX <= this.imagePosition.x + width &&
             mouseY >= this.imagePosition.y && 
-            mouseY <= this.imagePosition.y + size) {
+            mouseY <= this.imagePosition.y + height) {
             
             this.isDragging = true;
             this.dragOffset.x = mouseX - this.imagePosition.x;
@@ -294,10 +299,16 @@ class CertificateGenerator {
         const mouseY = (e.clientY - rect.top) * scaleY;
         
         if (this.isCropping && this.isSelectingCrop) {
-            // Update circular crop selection
-            const dx = mouseX - this.cropCenter.x;
-            const dy = mouseY - this.cropCenter.y;
-            this.cropRadius = Math.sqrt(dx * dx + dy * dy);
+            // Update rectangular crop selection
+            this.cropEnd.x = mouseX;
+            this.cropEnd.y = mouseY;
+            
+            // Calculate rectangle bounds
+            this.cropRect.x = Math.min(this.cropStart.x, this.cropEnd.x);
+            this.cropRect.y = Math.min(this.cropStart.y, this.cropEnd.y);
+            this.cropRect.width = Math.abs(this.cropEnd.x - this.cropStart.x);
+            this.cropRect.height = Math.abs(this.cropEnd.y - this.cropStart.y);
+            
             this.drawCropSelection();
             return;
         }
@@ -307,9 +318,11 @@ class CertificateGenerator {
         this.imagePosition.x = mouseX - this.dragOffset.x;
         this.imagePosition.y = mouseY - this.dragOffset.y;
         
-        const size = this.circleSize || 200;
-        this.imagePosition.x = Math.max(0, Math.min(this.canvas.width - size, this.imagePosition.x));
-        this.imagePosition.y = Math.max(0, Math.min(this.canvas.height - size, this.imagePosition.y));
+        const width = this.imageAreaWidth || 1832;
+        const height = this.imageAreaHeight || 1933;
+        // Constrain to the adjusted box area with 35% + 17% height increase, centered
+        this.imagePosition.x = Math.max(324, Math.min(2156 - width, this.imagePosition.x));
+        this.imagePosition.y = Math.max(429, Math.min(429 + height, this.imagePosition.y));
         
         this.redrawCertificate();
         this.updateDragHandle();
@@ -402,28 +415,26 @@ class CertificateGenerator {
         // Redraw original image
         this.showOriginalImageForCropping();
         
-        if (this.cropRadius <= 0) return;
+        if (this.cropRect.width <= 0 || this.cropRect.height <= 0) return;
         
-        // Create a path for the circle
+        // Create a path for the rectangle
         this.ctx.save();
         
         // Draw dark overlay everywhere
         this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
         
-        // Create circular clipping path to reveal selected area
+        // Create rectangular clipping path to reveal selected area
         this.ctx.globalCompositeOperation = 'destination-out';
-        this.ctx.beginPath();
-        this.ctx.arc(this.cropCenter.x, this.cropCenter.y, this.cropRadius, 0, 2 * Math.PI);
-        this.ctx.fill();
+        this.ctx.fillRect(this.cropRect.x, this.cropRect.y, this.cropRect.width, this.cropRect.height);
         
         // Reset composite operation
         this.ctx.globalCompositeOperation = 'source-over';
         
-        // Redraw the selected circular area
+        // Redraw the selected rectangular area
         this.ctx.save();
         this.ctx.beginPath();
-        this.ctx.arc(this.cropCenter.x, this.cropCenter.y, this.cropRadius, 0, 2 * Math.PI);
+        this.ctx.rect(this.cropRect.x, this.cropRect.y, this.cropRect.width, this.cropRect.height);
         this.ctx.clip();
         
         // Calculate and draw the selected portion of the original image
@@ -437,20 +448,18 @@ class CertificateGenerator {
         
         this.ctx.restore();
         
-        // Draw selection border circle
+        // Draw selection border rectangle
         this.ctx.strokeStyle = '#ffffff';
         this.ctx.lineWidth = 3;
         this.ctx.setLineDash([8, 8]);
-        this.ctx.beginPath();
-        this.ctx.arc(this.cropCenter.x, this.cropCenter.y, this.cropRadius, 0, 2 * Math.PI);
-        this.ctx.stroke();
+        this.ctx.strokeRect(this.cropRect.x, this.cropRect.y, this.cropRect.width, this.cropRect.height);
         this.ctx.setLineDash([]);
         
         this.ctx.restore();
     }
     
     confirmCrop() {
-        if (this.cropRadius <= 0) {
+        if (this.cropRect.width <= 0 || this.cropRect.height <= 0) {
             alert('Please select an area to crop.');
             return;
         }
@@ -460,55 +469,41 @@ class CertificateGenerator {
         const scaleY = this.originalImage.height / this.cropImagePos.height;
         
         // Convert display coordinates to source coordinates
-        const sourceCenterX = (this.cropCenter.x - this.cropImagePos.x) * scaleX;
-        const sourceCenterY = (this.cropCenter.y - this.cropImagePos.y) * scaleY;
-        const sourceRadius = this.cropRadius * scaleX; // Use scaleX for consistent scaling
+        const sourceX = (this.cropRect.x - this.cropImagePos.x) * scaleX;
+        const sourceY = (this.cropRect.y - this.cropImagePos.y) * scaleY;
+        const sourceWidth = this.cropRect.width * scaleX;
+        const sourceHeight = this.cropRect.height * scaleY;
         
         // Ensure the crop area is within image bounds
-        const maxRadius = Math.min(
-            sourceCenterX, 
-            sourceCenterY, 
-            this.originalImage.width - sourceCenterX, 
-            this.originalImage.height - sourceCenterY
-        );
-        const finalRadius = Math.min(sourceRadius, maxRadius);
+        const finalX = Math.max(0, sourceX);
+        const finalY = Math.max(0, sourceY);
+        const finalWidth = Math.min(sourceWidth, this.originalImage.width - finalX);
+        const finalHeight = Math.min(sourceHeight, this.originalImage.height - finalY);
         
-        // Calculate crop area bounds
-        const cropSize = finalRadius * 2;
-        const cropX = sourceCenterX - finalRadius;
-        const cropY = sourceCenterY - finalRadius;
-        
-        // Create circular cropped image - make it square
+        // Create rectangular cropped image
         const cropCanvas = document.createElement('canvas');
         const cropCtx = cropCanvas.getContext('2d');
         
-        cropCanvas.width = cropSize;
-        cropCanvas.height = cropSize;
+        cropCanvas.width = finalWidth;
+        cropCanvas.height = finalHeight;
         
         // Fill with transparent background first
-        cropCtx.clearRect(0, 0, cropSize, cropSize);
+        cropCtx.clearRect(0, 0, finalWidth, finalHeight);
         
-        // Create circular clipping path
-        cropCtx.save();
-        cropCtx.beginPath();
-        cropCtx.arc(finalRadius, finalRadius, finalRadius, 0, 2 * Math.PI);
-        cropCtx.clip();
-        
-        // Draw the image portion within the circle
+        // Draw the image portion within the rectangle
         cropCtx.drawImage(
             this.originalImage,
-            cropX, cropY, cropSize, cropSize,
-            0, 0, cropSize, cropSize
+            finalX, finalY, finalWidth, finalHeight,
+            0, 0, finalWidth, finalHeight
         );
-        
-        cropCtx.restore();
         
         // Create new image from cropped canvas
         const croppedImg = new Image();
         croppedImg.onload = () => {
-            // Use the calculated circle size to match background
-            const size = this.circleSize || 200;
-            this.uploadedImage = this.resizeImageCircular(croppedImg, size, size);
+            // Use the calculated area dimensions for rectangular aspect ratio
+            const width = this.imageAreaWidth || 1832;
+            const height = this.imageAreaHeight || 1224;
+            this.uploadedImage = this.resizeImageRectangular(croppedImg, width, height);
             this.cancelCrop();
             this.redrawCertificate();
             this.updateDragHandle();
@@ -516,26 +511,30 @@ class CertificateGenerator {
         croppedImg.src = cropCanvas.toDataURL();
     }
     
-    resizeImageCircular(img, targetWidth, targetHeight) {
+    resizeImageRectangular(img, targetWidth, targetHeight) {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         
         canvas.width = targetWidth;
         canvas.height = targetHeight;
         
+        // Calculate scale to fit image within target dimensions while maintaining aspect ratio
+        const scaleX = targetWidth / img.width;
+        const scaleY = targetHeight / img.height;
+        const scale = Math.min(scaleX, scaleY); // Use the smaller scale to ensure it fits
+        
+        const drawWidth = img.width * scale;
+        const drawHeight = img.height * scale;
+        
+        // Center the image
+        const offsetX = (targetWidth - drawWidth) / 2;
+        const offsetY = (targetHeight - drawHeight) / 2;
+        
         // Clear with transparent background
         ctx.clearRect(0, 0, targetWidth, targetHeight);
         
-        // Create circular clipping path
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(targetWidth/2, targetHeight/2, Math.min(targetWidth, targetHeight)/2, 0, 2 * Math.PI);
-        ctx.clip();
-        
-        // Draw the image to fill the circle
-        ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
-        
-        ctx.restore();
+        // Draw the scaled image without any clipping
+        ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
         
         return canvas;
     }

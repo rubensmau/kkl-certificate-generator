@@ -1,3 +1,14 @@
+/* Font face definition for Futura Lt BT */
+@font-face {
+    font-family: 'Futura Lt BT';
+    src: url('fonts/FuturaLT-Light.woff2') format('woff2'),
+         url('fonts/FuturaLT-Light.woff') format('woff'),
+         url('fonts/FuturaLT-Light.ttf') format('truetype');
+    font-weight: 300;
+    font-style: normal;
+    font-display: swap; /* Improves loading performance */
+}
+
 * {
     margin: 0;
     padding: 0;
